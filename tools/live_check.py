@@ -1,6 +1,6 @@
 """Live end-to-end check against a running server (real Claude + real ElevenLabs): ask the demo question in a real browser and print what happened.
 
-    python3 tools/live_check.py http://127.0.0.1:8151 "Show me the best match and why"
+    python3 tools/live_check.py http://127.0.0.1:8151 "Show me the best match and why" [--no-tts]
 
 Speech recognition is skipped (the question is typed through the page's own ask chip API); the server voice is used, and speechSynthesis is a
 recorder, so a fallback to the browser voice shows up in the output.
@@ -14,14 +14,18 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 from conftest import FAKE_SYNTH  # noqa: E402
 
-base = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8151"
-question = sys.argv[2] if len(sys.argv) > 2 else "Show me the best match and why"
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+base = args[0] if args else "http://127.0.0.1:8151"
+question = args[1] if len(args) > 1 else "Show me the best match and why"
+no_tts = "--no-tts" in sys.argv                     # the browser voice only: spends no ElevenLabs characters
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
     page = b.new_context(viewport={"width": 1440, "height": 900}).new_page()
     page.add_init_script(FAKE_SYNTH)
+    if no_tts:
+        page.add_init_script("window.PILOT_TEST_OPTS = {voice: 'browser'};")
     tts = []
     page.on("response", lambda r: tts.append((r.status, r.headers.get("x-pilot-cache"))) if "/pilot/tts" in r.url else None)
     page.goto(base + "/")

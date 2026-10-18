@@ -18,7 +18,7 @@ from .limits import Limiter
 
 log = logging.getLogger("voice_pilot.tts")
 
-_CUE = re.compile(r"\[\[?\s*\d{1,2}\s*\]\]?")
+_CUE = re.compile(r"\[\[\s*\d{1,2}\s*\]\]")
 _MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 
 

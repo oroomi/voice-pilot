@@ -35,6 +35,8 @@ class Settings:
     turn_deadline_s: float
     rate_per_min: int
     daily_turns: int
+    trust_proxy: bool        # read the client IP from cf-connecting-ip / x-forwarded-for (only behind a proxy you control)
+    tts_rate_per_min: int
     max_actions: int
     input_chars: int
     history_turns: int
@@ -60,6 +62,8 @@ def settings() -> Settings:
         turn_deadline_s=_get("PILOT_TURN_DEADLINE_S", 45.0, float),
         rate_per_min=_get("PILOT_RATE_PER_MIN", 12, int),
         daily_turns=_get("PILOT_DAILY_TURNS", 400, int),
+        trust_proxy=_get("PILOT_TRUST_PROXY", "0") in ("1", "true", "yes", "on"),
+        tts_rate_per_min=_get("PILOT_TTS_RATE_PER_MIN", 40, int),
         max_actions=_get("PILOT_MAX_ACTIONS", 8, int),
         input_chars=_get("PILOT_INPUT_CHARS", 600, int),
         history_turns=_get("PILOT_HISTORY_TURNS", 10, int),

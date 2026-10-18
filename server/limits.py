@@ -18,6 +18,7 @@ class Limiter:
 
     def reset(self) -> None:
         self.hits: dict[str, deque] = {}
+        self.tts_hits: dict[str, deque] = {}
         self.day, self.turns = "", 0
         self.tts_day, self.tts_chars = "", 0
 
@@ -41,6 +42,21 @@ class Limiter:
                     self.hits.pop(k, None)
             return None
 
+    def tts_rate(self, ip: str, per_min: int, now: float | None = None) -> bool:
+        """True when this IP may request another clip this minute (and counts it)."""
+        now = time.monotonic() if now is None else now
+        with self.lock:
+            q = self.tts_hits.setdefault(ip, deque())
+            while q and now - q[0] > 60:
+                q.popleft()
+            if len(q) >= per_min:
+                return False
+            q.append(now)
+            if len(self.tts_hits) > 5000:
+                for k in [k for k, v in self.tts_hits.items() if not v or now - v[-1] > 60]:
+                    self.tts_hits.pop(k, None)
+            return True
+
     def charge_tts(self, chars: int, cap: int) -> bool:
         with self.lock:
             if self.tts_day != _today():
@@ -59,7 +75,12 @@ class Limiter:
             return cap if self.tts_day != _today() else max(0, cap - self.tts_chars)
 
 
-def client_ip(request) -> str:
+def client_ip(request, trust_proxy: bool = False) -> str:
+    """The socket's address; the forwarded headers only when trust_proxy is set (PILOT_TRUST_PROXY=1 behind Cloudflare or nginx),
+    because anyone can send an X-Forwarded-For header and get a fresh rate-limit bucket with each request."""
     h = request.headers
-    return (h.get("cf-connecting-ip") or (h.get("x-forwarded-for") or "").split(",")[0].strip()
-            or (request.client.host if request.client else "?"))[:64]
+    if trust_proxy:
+        fwd = h.get("cf-connecting-ip") or (h.get("x-forwarded-for") or "").split(",")[0].strip()
+        if fwd:
+            return fwd[:64]
+    return (request.client.host if request.client else "?")[:64]

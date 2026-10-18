@@ -21,7 +21,8 @@ action timed to the sentence that mentions it. Built for hackathon demos where t
   Unknown targets are refused server-side, skipped client-side, and reported back to the model. See [docs/ACTIONS.md](docs/ACTIONS.md).
 - **Server** (`server/`, FastAPI, Python 3.12): `POST /pilot/chat` (SSE: status, delta, action, error, done), `POST /pilot/tts` (ElevenLabs
   streaming proxy, daily character cap, cache of identical text), `GET /pilot/status`. Claude via the Anthropic SDK (default
-  `claude-sonnet-5-5`), a tool loop with pluggable read-only data tools plus the UI tools, short spoken answers, per-IP rate limit.
+  `claude-sonnet-5-5`), a tool loop with pluggable read-only data tools plus the UI tools, short spoken answers, per-IP rate limits on
+  questions and on voice clips (socket address; forwarded headers only with `PILOT_TRUST_PROXY=1`), request size limits.
 - **Next.js port** (`server-node/`): the same three routes as App Router route handlers in TypeScript. See [server-node/README.md](server-node/README.md).
 - **Demo** (`demo/`): a 3-page sample site ("Matchboard", fictional ocean-tech startups and funders, clearly labelled as sample data).
 
@@ -115,13 +116,14 @@ Everything is an environment variable with a default; `.env.example` lists all o
 `PILOT_MODEL` (`claude-sonnet-5-5`), `PILOT_THINKING` (`adaptive`; `between_tools` is faster on Sonnet 5.5), `PILOT_EFFORT` (`low`),
 `PILOT_FALLBACKS` (`default`: server-side refusal fallback on the Claude API; set `off` behind a proxy that rejects it; a 400 about it is
 retried once without it), `ELEVENLABS_MODEL_ID` (`eleven_multilingual_v2`; `eleven_flash_v2_5` starts faster), `PILOT_TTS_DAILY_CHARS`
-(20000), `PILOT_RATE_PER_MIN` (12), `PILOT_REHEARSAL`. Client options are listed at the top of `client/pilot.js` (`pauseMs`, `lang`,
+(20000), `PILOT_RATE_PER_MIN` (12), `PILOT_TTS_RATE_PER_MIN` (40), `PILOT_TRUST_PROXY` (0; set 1 behind your own proxy or tunnel so
+each visitor gets their own bucket), `PILOT_REHEARSAL`. Client options are listed at the top of `client/pilot.js` (`pauseMs`, `lang`,
 `voice`, `autoDock`, `listenAfterAnswer`, `navigate`, `onAction`, ...). Re-skin with the `--vp-*` custom properties in `client/pilot.css`.
 
 ## Tests
 
 ```bash
-python3 -m pytest -q          # 29 tests: server unit tests, browser tests (Playwright, Chromium), the Node port's suite + parity check
+python3 -m pytest -q          # 33 tests: server unit tests, browser tests (Playwright, Chromium), the Node port's suite + parity check
 ```
 
 No network and no keys: the model is a fake Anthropic client (`server/fake.py`), the voice upstream is a fake coroutine, and the browser
@@ -129,7 +131,8 @@ tests load the demo from a fake origin answered in-process (Starlette TestClient
 a recording speechSynthesis. They prove: the 1.5 s pause, tap-to-send, actions in order and each just before its sentence, navigation
 keeping the overlay and the conversation alive, unknown targets skipped and reported, cue-less actions spread over sentences, a lead-in
 that takes no action, the spotlight landing on its target and clear of the docked bubble, TTS failure falling back to the browser voice, Escape, errors spoken, and
-rehearsal mode end to end. `python3 tools/build_client.py` rebuilds the script-tag file (a test fails if you forget).
+rehearsal mode end to end, closing mid-answer cancelling queued actions, off-site navigate paths refused on both sides,
+forwarded-header spoofing ignored, the voice rate limit and the request size limit. `python3 tools/build_client.py` rebuilds the script-tag file (a test fails if you forget).
 
 ## Layout
 
@@ -151,7 +154,10 @@ tests/       test_server.py, test_client.py, test_node_port.py, conftest.py
 - **One spoken clip per beat** gives exact sentence timing but small prosody breaks between sentences.
 - **Page swap navigation** needs the server to render full pages with the same `[data-pilot-main]` region; inline scripts in the swapped
   region are re-run, but code that ran once on `DOMContentLoaded` outside it is not (listen for `pilot:navigated`).
-- **Limits are in memory** (rate, daily turns, TTS characters, TTS cache): per process, reset on restart.
+- **Limits are in memory** (rate, daily turns, TTS characters, TTS cache): per process, reset on restart. Behind a proxy without
+  `PILOT_TRUST_PROXY=1` every visitor shares one bucket; the Next.js port has no socket address and always reads the forwarded headers.
+- **`navigate` accepts a query string** on a declared page, so do not give the model GET routes that change data.
+- **Voice clips are fetched one beat ahead**, so an interrupted answer has paid for the next sentence's characters.
 - **The Next.js routes were tested in Node 22 with fakes** (and typechecked), not inside a running `next dev`; the client snippet for
   Next.js above is untested in a real Next app.
 - **Mobile:** the layout and the docked orb are checked at 390x844 in screenshots; real-device microphone and audio-unlock behaviour on

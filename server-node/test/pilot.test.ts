@@ -631,7 +631,7 @@ test("tts cache keeps only the most recent entries", async () => {
 
 test("spoken(): cue markers, markdown, links and urls come off", () => {
   assert.equal(spoken("[[1]] Hello **there**, `friend`!"), "Hello there, friend!");
-  assert.equal(spoken("[2] See [the docs](https://x.example/a?b=1) at https://example.com/path now."), "See the docs at now.");
+  assert.equal(spoken("[2] See [the docs](https://x.example/a?b=1) at https://example.com/path now."), "[2] See the docs at now.");   // a lone [2] is not a cue
   assert.equal(spoken("# Title\n> quote_with_underscores\n\n  spaced   out "), "Title quotewithunderscores spaced out");
   assert.equal(spoken(""), "");
   assert.equal(spoken("[[12]]Ok"), "Ok");

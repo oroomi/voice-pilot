@@ -269,3 +269,37 @@ def test_text_split_mid_word_is_forwarded_unchanged_and_steps_are_separated_once
     ev = _events(turn)
     said = "".join(d["text"] for k, d in ev if k == "delta")
     assert said == "One moment. [[1]] Kelpforge leads." and ev[-1][1]["text"] == said
+
+
+def test_navigate_paths_that_a_browser_would_resolve_off_site_are_refused_even_without_declared_pages():
+    from server.registry import safe_path
+    for bad in ["/.//evil.invalid/x", "/x/..//evil.invalid/", "/%2F/evil.invalid", "/a/../b", "/./b", "//evil", "/\\evil", "https://evil"]:
+        assert not safe_path(bad), bad
+    for ok in ["/", "/matches", "/startups/kelpforge?tab=why#top", "/a.b/c-d"]:
+        assert safe_path(ok), ok
+    m = clean_manifest({"page": {"path": "/"}, "targets": []})                     # no pages declared: the check must still hold
+    turn = Turn([{"role": "user", "content": "x"}], m, Registry(), FakeClient([reply(tool("navigate", path="/.//evil.invalid/x"),
+                                                                                         tool("wait", ms=float("inf"))), reply(text("Ok."))]), config.settings())
+    ev = _events(turn)
+    assert ev[-1][0] == "done" and not [d for k, d in ev if k == "action"]          # both refused, and Infinity did not crash the turn
+
+
+def test_forwarded_headers_are_ignored_unless_the_proxy_is_trusted_and_tts_has_its_own_rate_limit(app_client, monkeypatch):
+    c, st = app_client
+    monkeypatch.setenv("PILOT_RATE_PER_MIN", "2")
+    st.client_factory = lambda s, q, m: FakeClient([reply(text("Hi."))])
+    body = {"messages": [{"role": "user", "content": "hi"}], "manifest": MANIFEST}
+    codes = [c.post("/pilot/chat", json=body, headers={"X-Forwarded-For": f"10.0.0.{i}"}).status_code for i in range(4)]
+    assert codes == [200, 200, 429, 429]                                            # rotating the header does not buy new buckets
+    monkeypatch.setenv("PILOT_TRUST_PROXY", "1")
+    st.limiter.reset()
+    codes = [c.post("/pilot/chat", json=body, headers={"CF-Connecting-IP": f"10.0.1.{i}"}).status_code for i in range(4)]
+    assert codes == [200, 200, 200, 200]
+    monkeypatch.setenv("PILOT_TRUST_PROXY", "0")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-not-a-key")
+    monkeypatch.setenv("ELEVENLABS_VOICE_ID", "voice123")
+    monkeypatch.setenv("PILOT_TTS_RATE_PER_MIN", "3")
+    st.voice.upstream = _fake_upstream([])
+    tts_codes = [c.post("/pilot/tts", json={"text": f"Clip {i}."}).status_code for i in range(5)]
+    assert tts_codes == [200, 200, 200, 429, 429]
+    assert c.post("/pilot/chat", content=b"{" + b" " * 300_000 + b"}", headers={"Content-Type": "application/json"}).status_code == 413

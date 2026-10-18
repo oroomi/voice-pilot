@@ -40,7 +40,7 @@ TOUR_RULES = (
     "A question that needs nothing on screen gets no UI calls.")
 
 FINAL_NOTE = "This is your last round: do not call a tool. Write the spoken answer now from what you have, with the cues you already got."
-SPOKEN_CUE = re.compile(r"\[\[?\s*\d{1,2}\s*\]\]?")
+SPOKEN_CUE = re.compile(r"\[\[\s*\d{1,2}\s*\]\]")
 
 
 def system_prompt(s: config.Settings, app_name: str, app_desc: str, persona: str = "") -> str:

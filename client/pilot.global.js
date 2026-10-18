@@ -22,7 +22,7 @@
 
 const VERSION = "0.1.0";
 const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=";
-const CUE = /\[\[?\s*(\d{1,2})\s*\]\]?/g;
+const CUE = /\[\[\s*(\d{1,2})\s*\]\]/g;            /* a cue is always [[n]]; a lone [3] is left alone */
 const SENTENCE_END = /[.!?…]+["'”’)\]]*\s+/g;
 const DEFAULTS = {
   endpoint: "/pilot",            // POST {endpoint}/chat, POST {endpoint}/tts, GET {endpoint}/status
@@ -40,6 +40,7 @@ const DEFAULTS = {
   history: 8,                    // conversation turns sent with each question
   listenAfterAnswer: false,      // open the microphone again when an answer ends
   holdSpotlightMs: 3500,         // how long the last spotlight stays after the answer ends
+  onAction: null,                // async (action, pilot) => true (handled) | false (refused, reported) | undefined (run it as usual)
   mount: null                    // element to mount into (default document.body)
 };
 
@@ -58,7 +59,7 @@ const estMs = (text) => Math.max(1400, clean(text).length * 62);
 function sameOriginPath(href) {
   try {
     const u = new URL(href, location.href);
-    if (u.origin !== location.origin) return null;
+    if (u.origin !== location.origin || u.pathname.startsWith("//")) return null;   /* "/.//evil.example" resolves to "//evil.example" */
     return u.pathname + u.search + u.hash;
   } catch (e) { return null; }
 }
@@ -103,6 +104,7 @@ class Speaker {
     this.p = p; this.audio = null; this.ctx = null; this.an = null; this.buf = null; this.token = 0; this.kick = 0; this.synthOn = false;
     this.synth = "speechSynthesis" in window ? window.speechSynthesis : null;
     this.server = null;                         // null = not known yet; false after a failure (the rest of the session uses the browser voice)
+    this.urls = [];                             // clip URLs not yet released
   }
   ensure() {
     if (this.audio) return;
@@ -148,7 +150,9 @@ class Speaker {
       const b = await r.blob();
       if (!b.size) throw new Error("tts empty");
       this.server = true;
-      return URL.createObjectURL(b);
+      const url = URL.createObjectURL(b);
+      this.urls.push(url);
+      return url;
     } catch (e) {
       this.server = false;
       this.p.trace("tts-fallback", { why: String(e && e.message || e) });
@@ -157,6 +161,7 @@ class Speaker {
   }
   stop() {
     this.token += 1; this.synthOn = false;
+    this.urls.splice(0).forEach((u) => { try { URL.revokeObjectURL(u); } catch (e) {} });
     try { if (this.synth && (this.synth.speaking || this.synth.pending)) this.synth.cancel(); } catch (e) {}
     if (this.audio) { this.audio.onended = null; this.audio.onerror = null; try { this.audio.pause(); } catch (e) {} }
   }
@@ -365,7 +370,7 @@ class Narrator {
   async play(b) {
     const gen = this.gen, p = this.p;
     b.started = true;
-    if (!b.actions.length && !/\[\[?\s*\d{1,2}\s*\]\]?/.test(this.raw)) {
+    if (!b.actions.length && !/\[\[\s*\d{1,2}\s*\]\]/.test(this.raw)) {
       /* the model wrote no cues at all (so far): this beat takes the next pending actions, up to and including one highlight. Only actions
          that arrived before this beat's words began: a lead-in said while the tools ran ("Let me pull that up.") takes none. */
       for (const a of [...this.actions.values()].filter((x) => x.state === "pending" && x.at <= b.start).sort((x, y) => x.id - y.id)) {
@@ -781,7 +786,10 @@ class Pilot {
     const all = [...document.querySelectorAll("[data-pilot]")].filter((n) => n.dataset.pilot === id && !this.root.contains(n));
     return all.find(visible) || null;
   }
-  runActions(list) { list.reduce((c, a) => c.then(() => this.exec(a)), Promise.resolve()); }
+  runActions(list) {                                          /* stops with the answer: a closed or interrupted answer runs nothing more */
+    const gen = this.narrator.gen;
+    list.reduce((c, a) => c.then(() => (gen === this.narrator.gen ? this.exec(a) : null)), Promise.resolve());
+  }
   report(a, ok, why) {
     a.state = ok ? "done" : "failed";
     const r = { id: a.id, type: a.type, target: a.target, path: a.path, ok, why: why || "" };
@@ -815,7 +823,7 @@ class Pilot {
         await this.scrollTo(t); this.pulse(t); await sleep(160); t.click(); await frames(2);
         return this.report(a, true);
       }
-      if (a.type === "fill") { await this.scrollTo(t); const ok = this.fill(t, a.value); this.pulse(t); await frames(2); return this.report(a, ok, ok ? "" : "no such option"); }
+      if (a.type === "fill") { await this.scrollTo(t); const ok = this.fill(t, a.value); if (ok) this.pulse(t); await frames(2); return this.report(a, ok, ok ? "" : "not fillable, or no such option"); }
       return this.report(a, false, "unknown action");
     } catch (e) {
       return this.report(a, false, String(e && e.message || e).slice(0, 80));
@@ -823,8 +831,9 @@ class Pilot {
   }
   fill(t, value) {
     const v = String(value == null ? "" : value);
-    const target = /^(input|select|textarea)$/i.test(t.tagName) ? t : t.querySelector("input, select, textarea");
-    if (!target) return false;
+    const inner = t.querySelectorAll("input, select, textarea");
+    const target = /^(input|select|textarea)$/i.test(t.tagName) ? t : inner.length === 1 ? inner[0] : null;
+    if (!target || /^(password|file|hidden)$/i.test(target.type || "")) return false;   /* never secrets or uploads */
     if (target.tagName.toLowerCase() === "select") {
       const o = [...target.options].find((o) => o.value.toLowerCase() === v.toLowerCase() || o.textContent.trim().toLowerCase() === v.toLowerCase());
       if (!o) return false;
@@ -902,7 +911,9 @@ class Pilot {
   async swap(p, push) {
     let html;
     try {
-      const r = await fetch(p, { headers: { Accept: "text/html", "X-Pilot-Navigate": "1" } });
+      const u = new URL(p, location.origin);
+      if (u.origin !== location.origin) return { ok: false, why: "not a path on this site" };
+      const r = await fetch(u.href, { headers: { Accept: "text/html", "X-Pilot-Navigate": "1" } });
       if (!r.ok) return { ok: false, why: "the page answered " + r.status };
       html = await r.text();
     } catch (e) { return { ok: false, why: "the page could not be fetched" }; }

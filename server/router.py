@@ -84,9 +84,17 @@ def make_router(registry: Registry, *, prefix: str = "/pilot", app_name: str = "
             yield sse("error", {"kind": kind, "message": message})
         return StreamingResponse(gen(), status_code=code, media_type="text/event-stream", headers={**SSE_HEADERS, **(headers or {})})
 
+    def too_big(request: Request, limit: int) -> bool:
+        try:
+            return int(request.headers.get("content-length") or 0) > limit
+        except ValueError:
+            return True
+
     @router.post(f"{prefix}/chat")
     async def chat(request: Request):
         s = config.settings()
+        if too_big(request, 256_000):
+            return JSONResponse({"error": "the request is too large"}, status_code=413)
         try:
             body = await request.json()
             if not isinstance(body, dict):
@@ -104,7 +112,7 @@ def make_router(registry: Registry, *, prefix: str = "/pilot", app_name: str = "
             manifest["app"]["description"] = st.app_description
         if st.mode(s) == "off" and st.client_factory is None:
             return refuse("no_key", f"{s.assistant_name}'s reasoning is not switched on yet: the server needs ANTHROPIC_API_KEY.", 200)
-        refused = st.limiter.check(client_ip(request), s.rate_per_min, s.daily_turns)
+        refused = st.limiter.check(client_ip(request, s.trust_proxy), s.rate_per_min, s.daily_turns)
         if refused == "rate":
             return refuse("rate", "That is a lot of questions in a minute. Give me a moment and ask again.", 429, {"Retry-After": "30"})
         if refused == "cap":
@@ -130,6 +138,11 @@ def make_router(registry: Registry, *, prefix: str = "/pilot", app_name: str = "
 
     @router.post(f"{prefix}/tts")
     async def tts(request: Request):
+        s = config.settings()
+        if too_big(request, 16_000):
+            return JSONResponse({"error": "the request is too large"}, status_code=413)
+        if not st.limiter.tts_rate(client_ip(request, s.trust_proxy), s.tts_rate_per_min):
+            return JSONResponse({"error": "too many voice requests this minute; the browser voice is used"}, status_code=429, headers={"Retry-After": "30"})
         try:
             body = await request.json()
             text = body.get("text") if isinstance(body, dict) else None

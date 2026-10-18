@@ -217,3 +217,32 @@ def test_a_spotlight_at_the_bottom_of_the_page_is_scrolled_clear_of_the_docked_b
     r = page.evaluate("(() => { const s = document.querySelector('.vp-spot').getBoundingClientRect(), b = document.querySelector('.vp-bubble').getBoundingClientRect();"
                       " return {spotBottom: s.bottom, bubbleTop: b.top, spotTop: s.top}; })()")
     assert r["spotTop"] > 60 and r["spotBottom"] <= r["bubbleTop"], r
+
+
+def test_closing_mid_answer_cancels_the_actions_still_queued(harness):
+    stream = sse(("action", {"id": 1, "type": "highlight", "target": "matches-noop"}),
+                 ("action", {"id": 2, "type": "wait", "ms": 1500}),
+                 ("action", {"id": 3, "type": "click", "target": "filter-80"}),
+                 ("delta", {"text": "Filtering now.", "step": 1}), ("done", {}))
+    h = harness(overrides=chat_with(stream))
+    page = h.goto("/matches")
+    page.evaluate("window.__clicks = 0; document.querySelector('[data-pilot=filter-80]').addEventListener('click', () => window.__clicks++)")
+    page.evaluate("window.__synthMs = 200")
+    page.evaluate("window.VoicePilot.instance.open({ask: 'only the high scores'})")
+    page.wait_for_timeout(700)                                 # inside the wait action
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(2200)
+    assert h.pilot("p.mode") == "closed" and page.evaluate("window.__clicks") == 0
+
+
+def test_a_navigate_path_that_resolves_off_site_is_refused_in_the_browser_too(harness):
+    stream = sse(("action", {"id": 1, "type": "navigate", "path": "/.//evil.invalid/x"}),
+                 ("delta", {"text": "[[1]] Going somewhere.", "step": 1}), ("done", {}))
+    h = harness(overrides=chat_with(stream))
+    seen = []
+    page = h.goto("/")
+    page.on("request", lambda r: seen.append(r.url) if "evil" in r.url else None)
+    page.evaluate("window.VoicePilot.instance.open({ask: 'go'})")
+    wait_state(h, "done", 15000)
+    acts = h.pilot("p.log.filter(e => e.kind === 'action').map(e => [e.ok, e.why])")
+    assert acts == [[False, "not a path on this site"]] and not seen and page.evaluate("location.pathname") == "/"

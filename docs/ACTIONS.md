@@ -16,7 +16,7 @@ browser: sentence "The best one is Kelpforge, at 92." is about to play → run a
 ## Declaring targets
 
 Any element with `data-pilot="<id>"` is a target. Ids are stable words (`match-1`, `why`, `filter-sector`), 1-64 characters of
-`A-Z a-z 0-9 _ . : -`. Add a short description so the model knows what it is:
+`A-Z a-z 0-9 _ . : -`, starting with a letter or digit. Add a short description so the model knows what it is:
 
 ```html
 <section data-pilot="why" data-pilot-desc="Why it fits: the reason behind each part of the score">...</section>
@@ -49,11 +49,11 @@ This is what lets the model plan "navigate to /startups/kelpforge, then highligh
 
 | Tool the model calls | What the browser does | Server-side checks |
 |---|---|---|
-| `navigate(path)` | Fetches the page and swaps `[data-pilot-main]` and every `[data-pilot-region="x"]` in place, runs scripts inside them, updates `document.title` and history (`pushState`; Back works). The overlay, the voice and the conversation survive. With `opts.navigate` it calls your SPA router instead and waits for the DOM to settle. | Same-origin path starting with `/`; must match a declared page or `:param` pattern when pages are declared. After a navigate, the destination page's targets are the valid ones. |
+| `navigate(path)` | Fetches the page and swaps `[data-pilot-main]` and every `[data-pilot-region="x"]` in place, runs scripts inside them, updates `document.title` and history (`pushState`; Back works). The overlay, the voice and the conversation survive. With `opts.navigate` it calls your SPA router instead and waits for the DOM to settle. | A plain path on this site: starts with `/`, no `//` or backslash in the path (even percent-encoded) and no `.`/`..` segments, checked on the server and again in the browser (which also refuses anything that resolves to another origin). Must match a declared page or `:param` pattern when pages are declared. After a navigate, the destination page's targets are the valid ones. |
 | `scroll_to(target)` | Smooth-scrolls the target to the middle of the screen (skips if already in view) and waits for the scroll to stop. | Target exists on the page the tour is on. |
 | `highlight(target, caption)` | Scrolls it into view, dims the rest of the page and puts a cyan spotlight around it with the caption above (or below near the top). It follows scrolling and resizing; the next highlight moves it; it fades `holdSpotlightMs` (3.5 s) after the answer ends. | Target exists; caption trimmed to 80 characters. |
 | `click(target)` | Clicks it, but only if the element carries `data-pilot-safe` (checked again in the browser). A pulse ring shows what was pressed. | Target is marked safe. |
-| `fill(target, value)` | Sets an input, textarea, checkbox or select (by option value or text, any case) and fires `input` + `change`; React-controlled inputs see it too. | Target is fillable; for a select the value must be one of its options (matched to the option's own spelling). |
+| `fill(target, value)` | Sets an input, textarea, checkbox or select (by option value or text, any case) and fires `input` + `change`; React-controlled inputs see it too. Never password, file or hidden inputs; a container target works only if it holds exactly one control. | Target is fillable; for a select the value must be one of its options (matched to the option's own spelling). |
 | `wait(ms)` | Pauses the tour 100-3000 ms. | Clamped. |
 
 At most `PILOT_MAX_ACTIONS` (8) actions per answer.

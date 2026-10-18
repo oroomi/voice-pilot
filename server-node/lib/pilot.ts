@@ -36,6 +36,7 @@ export interface Settings {
   ttsDailyChars: number;
   ttsMaxChars: number;
   ttsCacheItems: number;
+  ttsRatePerMin: number;
 }
 
 function envStr(name: string, def: string): string {
@@ -77,6 +78,7 @@ export function settings(): Settings {
     ttsDailyChars: envInt("PILOT_TTS_DAILY_CHARS", 20000),
     ttsMaxChars: envInt("PILOT_TTS_MAX_CHARS", 600),
     ttsCacheItems: envInt("PILOT_TTS_CACHE_ITEMS", 200),
+    ttsRatePerMin: envInt("PILOT_TTS_RATE_PER_MIN", 40),
   };
 }
 
@@ -124,6 +126,16 @@ const errStatus = (e: unknown): number | undefined => (isObj(e) && typeof e.stat
 // ===================================================================================================================================
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 const PATH_RE = /^\/(?!\/)[A-Za-z0-9._~%!$&'()*+,;=:@\/?#-]{0,300}$/;
+
+/** A path on this site, and only this site: no '//' or backslash in the path part (even percent-encoded), no '.' or '..' segments,
+ *  because a browser resolves '/.//evil.example/x' to the protocol-relative '//evil.example/x'. Mirrors server/registry.py safe_path. */
+export function safePath(path: unknown): path is string {
+  if (typeof path !== "string" || !PATH_RE.test(path) || path.includes("\\")) return false;
+  let bare = path.split("#")[0].split("?")[0];
+  try { bare = decodeURIComponent(bare); } catch { return false; }
+  if (bare.includes("//") || bare.includes("\\")) return false;
+  return !bare.split("/").some((seg) => seg === "." || seg === "..");
+}
 const MAX_TARGETS = 80;
 const MAX_PAGES = 24;
 
@@ -182,7 +194,7 @@ export interface Action {
 function cleanTarget(t: unknown): Target | null {
   if (!isObj(t) || typeof t.id !== "string" || !ID_RE.test(t.id)) return null;
   const out: Target = { id: t.id, desc: squash(t.desc, 160), text: squash(t.text, 220) };
-  if (typeof t.href === "string" && PATH_RE.test(t.href)) out.href = t.href.slice(0, 200);
+  if (safePath(t.href)) out.href = t.href.slice(0, 200);
   if (t.safe === true) out.safe = true;
   const f = t.fill;
   if (isObj(f)) {
@@ -214,10 +226,10 @@ export function cleanManifest(raw: unknown): Manifest {
   const r: Any = isObj(raw) ? raw : {};
   const app: Any = isObj(r.app) ? r.app : {};
   const page: Any = isObj(r.page) ? r.page : {};
-  const path = typeof page.path === "string" && PATH_RE.test(page.path) ? page.path : "/";
+  const path = safePath(page.path) ? page.path : "/";
   const pages: PageSpec[] = [];
   for (const p of (Array.isArray(r.pages) ? r.pages : []).slice(0, MAX_PAGES)) {
-    if (isObj(p) && typeof p.path === "string" && PATH_RE.test(p.path)) {
+    if (isObj(p) && safePath(p.path)) {
       pages.push({ path: p.path.slice(0, 200), title: squash(p.title, 80), desc: squash(p.desc, 200), targets: cleanTargets(p.targets) });
     }
   }
@@ -301,7 +313,7 @@ export class TurnContext {
     const act: Any = { type: name };
     if (name === "navigate") {
       const path = args.path;
-      if (typeof path !== "string" || !PATH_RE.test(path)) return no("path must be a site path that starts with / (no other site).");
+      if (!safePath(path)) return no("path must be a plain site path that starts with / (no other site, no // or .. segments).");
       const pages = this.manifest.pages;
       if (pages.length && !matchPage(path, pages) && path.split("?")[0] !== this.manifest.page.path) {
         return no("Unknown page. Pages: " + pages.map((p) => p.path).join(", "));
@@ -424,7 +436,7 @@ export const TOUR_RULES =
   "A question that needs nothing on screen gets no UI calls.";
 
 export const FINAL_NOTE = "This is your last round: do not call a tool. Write the spoken answer now from what you have, with the cues you already got.";
-const SPOKEN_CUE = /\[\[?\s*\d{1,2}\s*\]\]?/g;
+const SPOKEN_CUE = /\[\[\s*\d{1,2}\s*\]\]/g;
 
 export function systemPrompt(s: Settings, appName: string, appDesc: string, persona = ""): string {
   const who = `You are ${s.assistantName}, the voice assistant inside ${appName || "this web app"}.`;
@@ -704,13 +716,29 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 
 export class Limiter {
   hits = new Map<string, number[]>();
+  ttsHits = new Map<string, number[]>();
   day = "";
   turns = 0;
   ttsDay = "";
   ttsChars = 0;
 
+  /** true when this IP may request another voice clip this minute (and counts it). */
+  ttsRate(ip: string, perMin: number, now = performance.now() / 1000): boolean {
+    let q = this.ttsHits.get(ip);
+    if (!q) {
+      q = [];
+      this.ttsHits.set(ip, q);
+    }
+    while (q.length && now - q[0] > 60) q.shift();
+    if (q.length >= perMin) return false;
+    q.push(now);
+    if (this.ttsHits.size > 5000) for (const [k, v] of this.ttsHits) if (!v.length || now - v[v.length - 1] > 60) this.ttsHits.delete(k);
+    return true;
+  }
+
   reset(): void {
     this.hits = new Map();
+    this.ttsHits = new Map();
     this.day = "";
     this.turns = 0;
     this.ttsDay = "";
@@ -766,7 +794,7 @@ export function clientIp(req: Request): string {
 // ===================================================================================================================================
 // the spoken voice (server/tts.py): an ElevenLabs streaming proxy with a daily character cap and an in-memory cache of identical text
 // ===================================================================================================================================
-const CUE = /\[\[?\s*\d{1,2}\s*\]\]?/g;
+const CUE = /\[\[\s*\d{1,2}\s*\]\]/g;
 const MD_LINK = /\[([^\]]+)\]\([^)]*\)/g;
 
 /** Text as it should be said: cue markers, markdown and URLs off, whitespace collapsed. */
@@ -1058,6 +1086,9 @@ export function createPilot(options: PilotOptions): Pilot {
   };
 
   const tts = async (req: Request): Promise<Response> => {
+    if (!limiter.ttsRate(clientIp(req), settings().ttsRatePerMin)) {
+      return jsonResponse({ error: "too many voice requests this minute; the browser voice is used" }, 429, { "Retry-After": "30" });
+    }
     let text: unknown;
     try {
       const body: unknown = await req.json();

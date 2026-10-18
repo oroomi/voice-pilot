@@ -9,12 +9,24 @@ from __future__ import annotations
 import inspect
 import json
 import re
+from urllib.parse import unquote
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
 PATH_RE = re.compile(r"^/(?!/)[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]{0,300}$")
 MAX_TARGETS, MAX_PAGES = 80, 24
+
+
+def safe_path(path) -> bool:
+    """A path on this site, and only this site: no '//' or backslash anywhere in the path part (even percent-encoded), and no '.' or '..'
+    segments, because a browser resolves '/.//evil.example/x' to the protocol-relative '//evil.example/x'."""
+    if not isinstance(path, str) or not PATH_RE.match(path) or "\\" in path:
+        return False
+    bare = unquote(path.split("#")[0].split("?")[0])
+    if "//" in bare or "\\" in bare:
+        return False
+    return not any(seg in (".", "..") for seg in bare.split("/"))
 
 
 # ---- the host app's data tools ----------------------------------------------------------------------------------------------------------
@@ -107,7 +119,7 @@ def _clean_target(t: Any) -> dict | None:
     if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not ID_RE.match(t["id"]):
         return None
     out = {"id": t["id"], "desc": _s(t.get("desc"), 160), "text": _s(t.get("text"), 220)}
-    if isinstance(t.get("href"), str) and PATH_RE.match(t["href"]):
+    if safe_path(t.get("href")):
         out["href"] = t["href"][:200]
     if t.get("safe") is True:
         out["safe"] = True
@@ -135,10 +147,10 @@ def clean_manifest(raw: Any) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     app = raw.get("app") if isinstance(raw.get("app"), dict) else {}
     page = raw.get("page") if isinstance(raw.get("page"), dict) else {}
-    path = page.get("path") if isinstance(page.get("path"), str) and PATH_RE.match(page.get("path") or "") else "/"
+    path = page.get("path") if safe_path(page.get("path")) else "/"
     pages = []
     for p in (raw.get("pages") if isinstance(raw.get("pages"), list) else [])[:MAX_PAGES]:
-        if isinstance(p, dict) and isinstance(p.get("path"), str) and PATH_RE.match(p["path"]):
+        if isinstance(p, dict) and safe_path(p.get("path")):
             pages.append({"path": p["path"][:200], "title": _s(p.get("title"), 80), "desc": _s(p.get("desc"), 200),
                           "targets": _clean_targets(p.get("targets"))})
     return {"app": {"name": _s(app.get("name"), 80), "description": _s(app.get("description"), 400)},
@@ -220,8 +232,8 @@ class TurnContext:
         act: dict = {"type": name}
         if name == "navigate":
             path = args.get("path")
-            if not isinstance(path, str) or not PATH_RE.match(path):
-                return None, "path must be a site path that starts with / (no other site)."
+            if not safe_path(path):
+                return None, "path must be a plain site path that starts with / (no other site, no // or .. segments)."
             pages = self.manifest["pages"]
             if pages and not match_page(path, pages) and path.split("?")[0] != self.manifest["page"]["path"]:
                 return None, "Unknown page. Pages: " + ", ".join(p["path"] for p in pages)
@@ -230,7 +242,7 @@ class TurnContext:
         elif name == "wait":
             try:
                 act["ms"] = max(100, min(3000, int(args.get("ms", 600))))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 return None, "ms must be a number of milliseconds."
         else:
             tid = args.get("target")
