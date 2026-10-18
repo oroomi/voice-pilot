@@ -29,7 +29,7 @@ action timed to the sentence that mentions it. Built for hackathon demos where t
 ## 60-second demo
 
 ```bash
-cd /root/hack/kits/voice-pilot
+cd voice-pilot
 pip install -r requirements.txt                       # fastapi uvicorn jinja2 anthropic httpx (+ pytest playwright for tests)
 export ANTHROPIC_API_KEY=... ELEVENLABS_API_KEY=... ELEVENLABS_VOICE_ID=...    # or put them in .env and load it with your process manager
 python3 -m uvicorn server.app:app --host 127.0.0.1 --port 8151
