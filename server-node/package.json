@@ -1,0 +1,20 @@
+{
+  "name": "voice-pilot-next",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Next.js (App Router, TypeScript) port of the voice-pilot reference server: /pilot/chat, /pilot/tts, /pilot/status.",
+  "scripts": {
+    "test": "node --test test/",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "typescript": "^5.9.0"
+  }
+}

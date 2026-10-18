@@ -135,7 +135,9 @@ select { font: inherit; color: var(--ink); background: var(--bg-2); border: 1px 
   main { padding: 32px 16px 120px; gap: 20px; }
   .top { gap: 12px; padding: 12px 16px; }
   .top nav a { padding: 6px 8px; font-size: 14px; }
-  .talk { padding: 0 12px; font-size: 13.5px; }
+  .talk { display: none; }                 /* the floating mic button is there on phones */
+  .top nav { min-width: 0; }
+  .brand { font-size: 15px; }
   .card { padding: 20px; }
   .lede { font-size: 16.5px; }
   .count { margin-left: 0; width: 100%; }
