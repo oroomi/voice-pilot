@@ -535,7 +535,7 @@ class Pilot {
     this.stopAll(); this.clearSpot(true); this.orb.stop();
     this.mode = "closed"; this.root.dataset.mode = "closed"; this.root.classList.remove("vp-in");
     this.ov.hidden = true; this.orbBtn.hidden = true; this.bubble.hidden = true; this.launchBtn.hidden = !this.opts.launcher;
-    document.documentElement.classList.remove("vp-open");
+    document.documentElement.classList.remove("vp-open", "vp-docked");
     this.setState("idle");
     if (this.lastFocus && this.lastFocus.focus && document.contains(this.lastFocus)) this.lastFocus.focus({ preventScroll: true });
     this.emit("close", {});
@@ -547,6 +547,7 @@ class Pilot {
     this.mode = want; this.root.dataset.mode = want;
     this.ov.hidden = on; this.bubble.hidden = !on;
     document.documentElement.classList.toggle("vp-open", !on);
+    document.documentElement.classList.toggle("vp-docked", on);
     this.place();
     this.syncBubble();
     this.emit("dock", { docked: on });
@@ -839,9 +840,13 @@ class Pilot {
   }
   pulse(t) { t.classList.remove("vp-pulse"); void t.offsetWidth; t.classList.add("vp-pulse"); setTimeout(() => t.classList.remove("vp-pulse"), 1200); }
   async scrollTo(t) {
-    const r = t.getBoundingClientRect(), H = window.innerHeight;
-    if (r.top >= 70 && r.bottom <= H - 110) return;
-    t.scrollIntoView({ behavior: this.reduced() ? "auto" : "smooth", block: r.height > H * 0.6 ? "start" : "center" });
+    /* into the clear band: below a sticky header, above the docked bubble (so the spotlight is never under it) */
+    const r = t.getBoundingClientRect(), H = window.innerHeight, top = 76;
+    const bub = this.mode === "docked" && !this.bubble.hidden ? this.bubble.getBoundingClientRect() : null;
+    const bottom = bub ? Math.max(180, H - bub.top + 16) : 110, room = H - top - bottom;   /* the bubble grows as words arrive */
+    if (r.top >= top && r.bottom <= H - bottom) return;
+    const y = window.scrollY + r.top - top - Math.max(0, (room - r.height) / 2);
+    window.scrollTo({ top: Math.max(0, Math.round(y)), behavior: this.reduced() ? "auto" : "smooth" });
     let last = -1, still = 0;
     for (let i = 0; i < 60 && still < 4; i++) { await frames(1); const y = window.scrollY; still = y === last ? still + 1 : 0; last = y; }
   }

@@ -23,6 +23,8 @@
 .vp button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .vp svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 html.vp-open { overflow: hidden; }
+/* while docked, the page gets room to scroll its last section above the bubble (set --vp-dock-room: 0 on :root to turn off) */
+html.vp-docked body { padding-bottom: var(--vp-dock-room, 200px) !important; }
 
 /* ---- launcher ------------------------------------------------------------------------------------------------------------------ */
 .vp-launch {

@@ -203,3 +203,17 @@ def test_a_lead_in_said_while_tools_run_takes_no_action_and_cues_still_time_the_
     wait_state(h, "done", 15000)
     log = h.pilot("p.log.filter(e => e.kind === 'action' || e.kind === 'speak').map(e => e.kind === 'action' ? 'a' + e.id : e.text.split(' ')[0])")
     assert log == ["Let", "a1", "Eight", "a2", "Three"], log
+
+
+def test_a_spotlight_at_the_bottom_of_the_page_is_scrolled_clear_of_the_docked_bubble(harness):
+    stream = sse(("action", {"id": 1, "type": "highlight", "target": "next-step", "caption": "Do this week"}),
+                 ("delta", {"text": "[[1]] Next step: send Blue Current the sensor dataset and book a partner call this week.", "step": 1}), ("done", {}))
+    h = harness(overrides=chat_with(stream))
+    page = h.goto("/startups/kelpforge")
+    page.evaluate("window.__synthMs = 2500")
+    page.evaluate("window.VoicePilot.instance.open({ask: 'what next?'})")
+    wait_state(h, "speaking")
+    page.wait_for_timeout(600)
+    r = page.evaluate("(() => { const s = document.querySelector('.vp-spot').getBoundingClientRect(), b = document.querySelector('.vp-bubble').getBoundingClientRect();"
+                      " return {spotBottom: s.bottom, bubbleTop: b.top, spotTop: s.top}; })()")
+    assert r["spotTop"] > 60 and r["spotBottom"] <= r["bubbleTop"], r

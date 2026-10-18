@@ -4,11 +4,13 @@ A drop-in voice assistant for any web app. You talk to it ("Aava"), it answers o
 it opens pages, scrolls to sections, puts a spotlight on the thing it is talking about, applies filters and presses safe buttons, each
 action timed to the sentence that mentions it. Built for hackathon demos where the judges should watch the AI take someone on a tour.
 
-![Aava mid-tour: the overlay has docked to a floating orb, the spotlight is on the best match while the sentence about it plays](docs/screens/desktop-spotlight.png)
+![The demo moment: "Aava, show me the best match and why", then the overlay docks and Aava opens pages and moves a spotlight sentence by sentence](docs/screens/demo.gif)
 
-| Listening (full overlay) | Mid-tour on a phone (docked orb + spotlight) | Live run, real Claude + ElevenLabs |
-|---|---|---|
-| ![overlay](docs/screens/desktop-overlay.png) | ![phone](docs/screens/phone-spotlight.png) | ![live](docs/screens/live-tour.png) |
+*24 s recording of the real client (`tools/record_gif.py`); the answer is a scripted stream so the recording repeats. The live run with the real model and voice is the third screenshot below.*
+
+| Listening (full overlay) | Docked orb + spotlight | Phone, mid-tour | Live run, real Claude + ElevenLabs |
+|---|---|---|---|
+| ![overlay](docs/screens/desktop-overlay.png) | ![spotlight](docs/screens/desktop-spotlight.png) | ![phone](docs/screens/phone-spotlight.png) | ![live](docs/screens/live-tour.png) |
 
 - **Client** (`client/pilot.js` + `pilot.css`): zero dependencies, ES module or script tag (`pilot.global.js`). Mic button, translucent
   full-screen overlay that docks to a floating glass orb while the page moves underneath, live transcript, streamed answer revealed word by
@@ -37,7 +39,7 @@ the chip with that question. In our last live run Aava said "Let me pull that up
 opened Kelpforge's page, spotlighted the score, then "Why it fits", then "Next step", one sentence each (the model's words vary per run). No keys? `PILOT_REHEARSAL=1` runs the same loop with a scripted
 plan and shows a **Rehearsal** badge; without ElevenLabs keys the browser's voice speaks.
 
-There is no GIF yet: the screenshots above are from `python3 tools/shots.py` (scripted stream) and `tools/live_check.py` (real model and voice).
+Screenshots: `python3 tools/shots.py` (scripted stream), `python3 tools/live_check.py <url> "question"` (real model and voice), `python3 tools/record_gif.py` (the GIF).
 
 ## Add it to any app in 30 minutes
 
@@ -119,14 +121,14 @@ retried once without it), `ELEVENLABS_MODEL_ID` (`eleven_multilingual_v2`; `elev
 ## Tests
 
 ```bash
-python3 -m pytest -q          # 28 tests: server unit tests, browser tests (Playwright, Chromium), the Node port's suite + parity check
+python3 -m pytest -q          # 29 tests: server unit tests, browser tests (Playwright, Chromium), the Node port's suite + parity check
 ```
 
 No network and no keys: the model is a fake Anthropic client (`server/fake.py`), the voice upstream is a fake coroutine, and the browser
 tests load the demo from a fake origin answered in-process (Starlette TestClient), with a fake SpeechRecognition driven from the test and
 a recording speechSynthesis. They prove: the 1.5 s pause, tap-to-send, actions in order and each just before its sentence, navigation
 keeping the overlay and the conversation alive, unknown targets skipped and reported, cue-less actions spread over sentences, a lead-in
-that takes no action, the spotlight landing on its target, TTS failure falling back to the browser voice, Escape, errors spoken, and
+that takes no action, the spotlight landing on its target and clear of the docked bubble, TTS failure falling back to the browser voice, Escape, errors spoken, and
 rehearsal mode end to end. `python3 tools/build_client.py` rebuilds the script-tag file (a test fails if you forget).
 
 ## Layout
@@ -137,7 +139,7 @@ server/      router.py (HTTP), turn.py (tool loop), registry.py (data tools, UI 
 server-node/ lib/pilot.ts + app/pilot/{chat,tts,status}/route.ts (Next.js), tests
 demo/        site.py (pages, data tools, rehearsal plan), data.py (sample data), templates/, static/ (demo.css, demo.js, pilot.manifest.json)
 docs/        ACTIONS.md, DEMO_MOMENTS.md, screens/
-tools/       build_client.py, shots.py, live_check.py
+tools/       build_client.py, shots.py, live_check.py, record_gif.py
 tests/       test_server.py, test_client.py, test_node_port.py, conftest.py
 ```
 
