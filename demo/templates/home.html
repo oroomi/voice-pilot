@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block main %}
+<section class="hero" data-pilot="hero" data-pilot-desc="Page intro: what Matchboard does">
+  <p class="eyebrow">Ocean-tech matchmaking · sample</p>
+  <h1>Which startup should each funder meet this week?</h1>
+  <p class="lede">Matchboard scores every startup against every funder on thesis, stage and traction, and shows the reason behind each point. Ask Aava, and watch it walk you through the board.</p>
+  <div class="asks" data-pilot="ask-chips" data-pilot-desc="Example questions to ask Aava">
+    <button type="button" class="ask" data-pilot-ask="Show me the best match and why">“Show me the best match and why”</button>
+    <button type="button" class="ask" data-pilot-ask="Who should fund Saltgrid?">“Who should fund Saltgrid?”</button>
+    <button type="button" class="ask" data-pilot-ask="Only show aquaculture matches">“Only show aquaculture matches”</button>
+  </div>
+</section>
+
+<section class="stats" data-pilot="stats" data-pilot-desc="Headline numbers">
+  <div class="stat"><span class="num">{{ startups|length }}</span><span class="lbl">startups scored</span></div>
+  <div class="stat"><span class="num">{{ funders|length }}</span><span class="lbl">funders</span></div>
+  <div class="stat"><span class="num">{{ startups[0].score }}</span><span class="lbl">top score this week</span></div>
+  <div class="stat"><span class="num">{{ startups|selectattr('score', 'ge', 80)|list|length }}</span><span class="lbl">matches at 80 or more</span></div>
+</section>
+
+<div class="grid-2">
+  <section class="card" data-pilot="how-scoring" data-pilot-desc="How the score out of 100 is made">
+    <h2>How a score is made</h2>
+    <ol class="parts">
+      <li><span class="part-n">0–40</span><div><strong>Thesis fit</strong><p>Does the startup do what the funder says it invests in?</p></div></li>
+      <li><span class="part-n">0–30</span><div><strong>Stage fit</strong><p>Is the round inside the funder's ticket and stage?</p></div></li>
+      <li><span class="part-n">0–30</span><div><strong>Traction</strong><p>Paying customers, pilots and data history.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="card feature" data-pilot="top-teaser" data-pilot-desc="This week's top match">
+    <p class="eyebrow">Top match this week</p>
+    <h2><a href="/startups/{{ top.slug }}">{{ top.name }}</a> <span class="x">×</span> {{ funders[top.funder].name }}</h2>
+    <p>{{ top.pitch }}</p>
+    <div class="scoreline"><span class="big">{{ top.score }}</span><span class="of">/ 100</span>
+      <span class="bar"><i style="width: {{ top.score }}%"></i></span></div>
+    <a class="go" href="/startups/{{ top.slug }}">See why it fits →</a>
+  </section>
+</div>
+
+<section class="card" data-pilot="funders" data-pilot-desc="The three funders and what they back">
+  <h2>Funders on the board</h2>
+  <ul class="funders">
+    {% for key, f in funders.items() %}
+    <li><strong>{{ f.name }}</strong><span class="tag">{{ f.kind }}</span><p>Backs {{ f.thesis }}. Ticket {{ f.ticket }}.</p></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

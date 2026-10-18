@@ -1,1 +1,11 @@
-{}
+{
+  "app": {
+    "name": "Matchboard (sample)",
+    "description": "Ranks which fictional ocean-tech startups each fictional funder should meet. Score out of 100 = thesis fit (0-40) + stage fit (0-30) + traction (0-30). All data is invented sample data."
+  },
+  "pages": [
+    {"path": "/", "title": "Overview", "desc": "What Matchboard does, headline numbers, how the score works, this week's top match, the funders"},
+    {"path": "/matches", "title": "Matches", "desc": "Every startup-to-funder match ranked by score, with a sector filter and a score filter"},
+    {"path": "/startups/:slug", "title": "Startup", "desc": "One startup: its score and the three parts, why it fits, its best funder, evidence, and the next step", "sample": "/startups/kelpforge"}
+  ]
+}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Matches{% endblock %}
+{% block main %}
+<section class="page-head">
+  <p class="eyebrow">Ranked by score</p>
+  <h1>Matches</h1>
+  <p class="lede">Each startup's best funder, with the score out of 100.</p>
+</section>
+
+<section class="filters" data-pilot="filters" data-pilot-desc="Filters for the match list">
+  <label class="field">Sector
+    <select data-pilot="filter-sector" data-pilot-desc="Sector filter" data-filter-sector>
+      <option value="">All sectors</option>
+      {% for s in sectors %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="chips" role="group" aria-label="Score">
+    <button type="button" class="chip" data-filter-min="0" aria-pressed="true" data-pilot="filter-all" data-pilot-safe data-pilot-desc="Show all scores">All scores</button>
+    <button type="button" class="chip" data-filter-min="80" aria-pressed="false" data-pilot="filter-80" data-pilot-safe data-pilot-desc="Show only scores of 80 or more">80 and up</button>
+  </div>
+  <p class="count" data-match-count>{{ startups|length }} matches</p>
+</section>
+
+<ol class="matches" data-pilot="match-list" data-pilot-desc="The ranked match list">
+  {% for s in startups %}
+  <li class="match" data-pilot="match-{{ s.rank }}" data-pilot-desc="Match #{{ s.rank }}: {{ s.name }} with {{ funders[s.funder].name }}, score {{ s.score }}"
+      data-sector="{{ s.sector }}" data-score="{{ s.score }}">
+    <span class="rank">{{ s.rank }}</span>
+    <div class="who">
+      <a class="name" href="/startups/{{ s.slug }}">{{ s.name }}</a>
+      <span class="meta">{{ s.sector }} · {{ s.stage }} · {{ s.city }}</span>
+    </div>
+    <div class="fund"><span class="meta">Best funder</span>{{ funders[s.funder].name }}</div>
+    <div class="score"><span class="bar"><i style="width: {{ s.score }}%"></i></span><span class="val">{{ s.score }}</span></div>
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}

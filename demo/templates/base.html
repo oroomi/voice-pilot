@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Matchboard{% endblock %} · Matchboard sample</title>
+<link rel="stylesheet" href="/demo-static/demo.css">
+<link rel="stylesheet" href="/pilot/client/pilot.css">
+</head>
+<body>
+<div class="sample-bar">Sample data. Every company and funder here is fictional, made up for this voice-pilot demo.</div>
+<header class="top">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Matchboard</a>
+  <nav data-pilot-region="nav" aria-label="Main">
+    <a href="/" {% if page == 'home' %}aria-current="page"{% endif %}>Overview</a>
+    <a href="/matches" {% if page in ('matches', 'startup') %}aria-current="page"{% endif %}>Matches</a>
+  </nav>
+  <button class="talk" type="button" data-pilot-open><span class="talk-dot" aria-hidden="true"></span>Talk to Aava</button>
+</header>
+<main data-pilot-main data-page="{{ page }}">
+{% block main %}{% endblock %}
+</main>
+<footer class="foot">voice-pilot demo · MIT · sample data only</footer>
+<script src="/demo-static/demo.js"></script>
+<script type="module">
+  import VoicePilot from "/pilot/client/pilot.js";
+  VoicePilot.init(Object.assign({ manifest: "/pilot.manifest.json" }, window.PILOT_TEST_OPTS || {}));
+</script>
+</body>
+</html>

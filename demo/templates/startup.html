@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }}{% endblock %}
+{% block main %}
+<a class="crumb" href="/matches">← All matches</a>
+<section class="profile" data-pilot="profile" data-pilot-desc="Startup name, pitch, sector, stage and city">
+  <p class="eyebrow">Rank {{ s.rank }} of {{ startups|length }}</p>
+  <h1>{{ s.name }}</h1>
+  <p class="lede">{{ s.pitch }}</p>
+  <p class="tags"><span class="tag">{{ s.sector }}</span><span class="tag">{{ s.stage }}</span><span class="tag">{{ s.city }}</span></p>
+</section>
+
+<div class="grid-2 detail">
+  <section class="card score-card" data-pilot="score" data-pilot-desc="The total score and its three parts">
+    <h2>Score</h2>
+    <div class="scoreline"><span class="big">{{ s.score }}</span><span class="of">/ 100</span></div>
+    {% set maxes = {'thesis': 40, 'stage': 30, 'traction': 30} %}
+    {% set names = {'thesis': 'Thesis fit', 'stage': 'Stage fit', 'traction': 'Traction'} %}
+    <ul class="breakdown">
+      {% for k in ['thesis', 'stage', 'traction'] %}
+      <li><span>{{ names[k] }}</span><span class="bar"><i style="width: {{ (s.parts[k] / maxes[k] * 100)|round }}%"></i></span><b>{{ s.parts[k] }}<small>/{{ maxes[k] }}</small></b></li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card" data-pilot="funder" data-pilot-desc="The best funder for this startup">
+    <h2>Best funder</h2>
+    <p class="funder-name">{{ f.name }}</p>
+    <p class="meta">{{ f.kind }} · ticket {{ f.ticket }}</p>
+    <p>Backs {{ f.thesis }}.</p>
+  </section>
+</div>
+
+<section class="card why" data-pilot="why" data-pilot-desc="Why it fits: the reason behind each part of the score">
+  <h2>Why it fits</h2>
+  <ul class="reasons">
+    <li><b>{{ s.parts.thesis }}/40</b><div><strong>Thesis</strong><p>{{ s.reasons.thesis }}</p></div></li>
+    <li><b>{{ s.parts.stage }}/30</b><div><strong>Stage</strong><p>{{ s.reasons.stage }}</p></div></li>
+    <li><b>{{ s.parts.traction }}/30</b><div><strong>Traction</strong><p>{{ s.reasons.traction }}</p></div></li>
+  </ul>
+</section>
+
+<div class="grid-2 detail">
+  <section class="card" data-pilot="evidence" data-pilot-desc="Evidence behind the score">
+    <h2>Evidence</h2>
+    <ul class="evidence">{% for e in s.evidence %}<li>{{ e }}</li>{% endfor %}</ul>
+  </section>
+  <section class="card next" data-pilot="next-step" data-pilot-desc="The recommended next step this week">
+    <h2>Next step</h2>
+    <p class="next-text">{{ s.next }}</p>
+  </section>
+</div>
+{% endblock %}
