@@ -890,6 +890,7 @@ class Pilot {
     const p = sameOriginPath(path || "/");
     if (!p) return { ok: false, why: "not a path on this site" };
     this.clearSpot(true);
+    if (p === location.pathname + location.search) return { ok: true };   /* already here: keep the page (and any filters just applied) */
     if (typeof this.opts.navigate === "function") {
       try { await this.opts.navigate(p); } catch (e) { return { ok: false, why: "the router refused" }; }
       await this.settle();
