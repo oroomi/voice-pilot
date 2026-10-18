@@ -411,7 +411,8 @@ export const ANSWER_SHAPE =
   "Answer shape, every time: your words are read aloud, so write ONE short paragraph, no line breaks, at most 4 sentences and about 70 words " +
   "(a greeting or thanks: one sentence). Lead with the direct answer, name at most 3 things, say why with one concrete fact each, and end with one " +
   "next step when it helps. No markdown, no bullets, no emoji, no URLs. Never mention your tools, cues, ids, searches or what they returned, and never " +
-  "say 'let me highlight': say what the records show while the page shows it. Write nothing before your tool calls are done.";
+  "say 'let me highlight': say what the records show while the page shows it. Before your first tool call you may say one short lead-in of " +
+  "at most 8 words, such as 'Let me pull that up.'; otherwise write nothing until your tool calls are done.";
 
 export const TOUR_RULES =
   "You can drive this website while you talk. When the answer is about something on a page, show it: call the UI tools (navigate, scroll_to, " +
@@ -563,6 +564,7 @@ export class Turn {
   private async *call(final: boolean, step: number): AsyncGenerator<SseEvent, Any, undefined> {
     const { params, options } = this.request(final);
     const stream = this.client.messages.stream(params, options);
+    let firstText = true;
     for await (const ev of stream) {
       const t = ev?.type;
       if (t === "content_block_start") {
@@ -575,10 +577,11 @@ export class Turn {
       } else if (t === "content_block_delta") {
         const d = ev.delta;
         if (d?.type === "text_delta" && d.text) {
-          if (step > 1 && this.text && !this.text.endsWith(" ") && !this.text.endsWith("\n")) {
+          if (firstText && this.text && !this.text.endsWith(" ") && !this.text.endsWith("\n")) {   // a new step's text never glues onto the last word
             this.text += " ";
             yield { event: "delta", data: { text: " ", step } };
           }
+          firstText = false;
           this.text += d.text;
           yield { event: "delta", data: { text: d.text, step } };
         }
@@ -623,6 +626,10 @@ export class Turn {
           return;
         }
         if (stop === "tool_use" && uses.length && !final) {
+          if (this.text && !this.text.endsWith(" ") && !this.text.endsWith("\n")) {   // close the lead-in now, so the browser can speak it while tools run
+            this.text += " ";
+            yield { event: "delta", data: { text: " ", step: this.steps } };
+          }
           this.messages.push({ role: "assistant", content });          // unchanged: thinking blocks go back as they came
           const results: Any[] = [];
           for (const b of uses) {

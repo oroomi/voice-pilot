@@ -12,8 +12,9 @@ from typing import Callable
 _ids = itertools.count(1)
 
 
-def text(t: str) -> NS:
-    return NS(type="text", text=t)
+def text(t: str, chunks: list[str] | None = None) -> NS:
+    """A text block; `chunks` streams it in exactly those pieces (the real API splits mid-word)."""
+    return NS(type="text", text=t, chunks=chunks)
 
 
 def tool(name: str, **inp) -> NS:
@@ -38,7 +39,10 @@ class FakeStream:
     def __iter__(self):
         for i, b in enumerate(self.r["content"]):
             yield NS(type="content_block_start", index=i, content_block=b)
-            if b.type == "text":
+            if b.type == "text" and getattr(b, "chunks", None):
+                for piece in b.chunks:
+                    yield NS(type="content_block_delta", index=i, delta=NS(type="text_delta", text=piece))
+            elif b.type == "text":
                 words = b.text.split(" ")
                 for j in range(0, len(words), self.chunk):
                     piece = " ".join(words[j:j + self.chunk]) + (" " if j + self.chunk < len(words) else "")

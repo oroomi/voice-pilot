@@ -27,7 +27,8 @@ ANSWER_SHAPE = (
     "Answer shape, every time: your words are read aloud, so write ONE short paragraph, no line breaks, at most 4 sentences and about 70 words "
     "(a greeting or thanks: one sentence). Lead with the direct answer, name at most 3 things, say why with one concrete fact each, and end with one "
     "next step when it helps. No markdown, no bullets, no emoji, no URLs. Never mention your tools, cues, ids, searches or what they returned, and never "
-    "say 'let me highlight': say what the records show while the page shows it. Write nothing before your tool calls are done.")
+    "say 'let me highlight': say what the records show while the page shows it. Before your first tool call you may say one short lead-in of "
+    "at most 8 words, such as 'Let me pull that up.'; otherwise write nothing until your tool calls are done.")
 
 TOUR_RULES = (
     "You can drive this website while you talk. When the answer is about something on a page, show it: call the UI tools (navigate, scroll_to, "
@@ -130,6 +131,7 @@ class Turn:
 
     def _call(self, kw: dict, step: int) -> Iterator[dict]:
         """Stream one model call: text deltas go out as they arrive; returns the final message."""
+        first_text = True
         with self.client.messages.stream(**kw) as stream:
             for ev in stream:
                 t = getattr(ev, "type", "")
@@ -142,9 +144,10 @@ class Turn:
                 elif t == "content_block_delta":
                     d = getattr(ev, "delta", None)
                     if getattr(d, "type", "") == "text_delta" and getattr(d, "text", ""):
-                        if step > 1 and self.text and not self.text.endswith((" ", "\n")):
+                        if first_text and self.text and not self.text.endswith((" ", "\n")):   # a new step's text never glues onto the last word
                             self.text += " "
                             yield {"event": "delta", "data": {"text": " ", "step": step}}
+                        first_text = False
                         self.text += d.text
                         yield {"event": "delta", "data": {"text": d.text, "step": step}}
             return stream.get_final_message()
@@ -186,6 +189,9 @@ class Turn:
                     yield self._err("refusal", f"{s.assistant_name} can't help with that one.")
                     return
                 if stop == "tool_use" and uses and not final:
+                    if self.text and not self.text.endswith((" ", "\n")):     # close the lead-in now, so the browser can speak it while tools run
+                        self.text += " "
+                        yield {"event": "delta", "data": {"text": " ", "step": self.steps}}
                     self.messages.append({"role": "assistant", "content": content})
                     results = []
                     for b in uses:

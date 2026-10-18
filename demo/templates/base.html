@@ -15,7 +15,7 @@
     <a href="/" {% if page == 'home' %}aria-current="page"{% endif %}>Overview</a>
     <a href="/matches" {% if page in ('matches', 'startup') %}aria-current="page"{% endif %}>Matches</a>
   </nav>
-  <button class="talk" type="button" data-pilot-open><span class="talk-dot" aria-hidden="true"></span>Talk<span class="talk-long">&nbsp;to Aava</span></button>
+  <button class="talk" type="button" data-pilot-open><span class="talk-dot" aria-hidden="true"></span><span>Talk<span class="talk-long"> to Aava</span></span></button>
 </header>
 <main data-pilot-main data-page="{{ page }}">
 {% block main %}{% endblock %}

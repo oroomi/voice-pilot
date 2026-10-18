@@ -299,7 +299,7 @@ class Narrator {
     this.gen += 1; this.raw = ""; this.used = 0; this.step = 0; this.beats = []; this.actions = new Map(); this.done = false;
     this.next = 0; this.running = false; this.audioChain = Promise.resolve(); this.finishedOnce = false; this.closedTo = -1;
   }
-  action(a) { if (a && a.id != null) this.actions.set(Number(a.id), Object.assign({}, a, { id: Number(a.id), state: "pending" })); }
+  action(a) { if (a && a.id != null) this.actions.set(Number(a.id), Object.assign({}, a, { id: Number(a.id), state: "pending", at: this.raw.length })); }
   delta(text, step) {
     if (step != null && step !== this.step) { if (this.raw && !/\s$/.test(this.raw)) this.raw += " "; this.step = step; }
     this.raw += text;
@@ -311,12 +311,12 @@ class Narrator {
     let m, last = 0;
     const out = [];
     SENTENCE_END.lastIndex = 0;
-    while ((m = SENTENCE_END.exec(rest))) { out.push(rest.slice(last, m.index + m[0].length)); last = m.index + m[0].length; }
-    if (final && rest.slice(last).trim()) { out.push(rest.slice(last)); last = rest.length; }
+    while ((m = SENTENCE_END.exec(rest))) { out.push([rest.slice(last, m.index + m[0].length), this.used + last]); last = m.index + m[0].length; }
+    if (final && rest.slice(last).trim()) { out.push([rest.slice(last), this.used + last]); last = rest.length; }
     this.used += last;
-    out.forEach((s) => this.sentence(s));
+    out.forEach(([s, start]) => this.sentence(s, start));
   }
-  sentence(s) {
+  sentence(s, start) {
     const ids = [];
     s.replace(CUE, (_, n) => { if (this.actions.has(Number(n))) ids.push(Number(n)); return ""; });
     const text = clean(s);
@@ -325,7 +325,7 @@ class Narrator {
     const canJoin = cur && !cur.started && !ids.length && this.beats.length > 1 && (cur.text.length + text.length) < 260;
     if (canJoin) { cur.text += " " + text; return; }
     if (cur && !text && ids.length && !cur.started) { cur.actions.push(...ids); return; }   /* a cue alone ("[[3]]") joins the beat before it */
-    this.beats.push({ i: this.beats.length, text, actions: ids, started: false, audio: null });
+    this.beats.push({ i: this.beats.length, text, actions: ids, started: false, audio: null, start: start || 0 });
     if (this.beats.length === 1) this.closeTo(0);              /* the first sentence plays as soon as it is written */
     else this.closeTo(this.beats.length - 2);
     this.pump();
@@ -362,8 +362,9 @@ class Narrator {
     const gen = this.gen, p = this.p;
     b.started = true;
     if (!b.actions.length && !/\[\[?\s*\d{1,2}\s*\]\]?/.test(this.raw)) {
-      /* the model wrote no cues at all (so far): this beat takes the next pending actions, up to and including one highlight */
-      for (const a of [...this.actions.values()].filter((x) => x.state === "pending").sort((x, y) => x.id - y.id)) {
+      /* the model wrote no cues at all (so far): this beat takes the next pending actions, up to and including one highlight. Only actions
+         that arrived before this beat's words began: a lead-in said while the tools ran ("Let me pull that up.") takes none. */
+      for (const a of [...this.actions.values()].filter((x) => x.state === "pending" && x.at <= b.start).sort((x, y) => x.id - y.id)) {
         b.actions.push(a.id);
         if (a.type === "highlight") break;
       }

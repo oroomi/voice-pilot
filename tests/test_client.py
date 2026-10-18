@@ -190,3 +190,16 @@ def test_rehearsal_mode_end_to_end_through_the_real_server_route(harness, site, 
 def test_the_script_tag_build_is_in_sync_with_the_module():
     r = subprocess.run([sys.executable, str(ROOT / "tools" / "build_client.py"), "--check"])
     assert r.returncode == 0, "run: python3 tools/build_client.py"
+
+
+def test_a_lead_in_said_while_tools_run_takes_no_action_and_cues_still_time_the_tour(harness):
+    stream = sse(("delta", {"text": "Let me pull that up.", "step": 1}), ("delta", {"text": " ", "step": 1}),
+                 ("action", {"id": 1, "type": "highlight", "target": "stats", "caption": "Numbers"}),
+                 ("action", {"id": 2, "type": "highlight", "target": "funders", "caption": "Funders"}),
+                 ("delta", {"text": "[[1]] Eight startups are scored. [[2]] Three funders back them.", "step": 2}), ("done", {}))
+    h = harness(overrides=chat_with(stream))
+    page = h.goto("/")
+    page.evaluate("window.VoicePilot.instance.open({ask: 'what is here?'})")
+    wait_state(h, "done", 15000)
+    log = h.pilot("p.log.filter(e => e.kind === 'action' || e.kind === 'speak').map(e => e.kind === 'action' ? 'a' + e.id : e.text.split(' ')[0])")
+    assert log == ["Let", "a1", "Eight", "a2", "Three"], log

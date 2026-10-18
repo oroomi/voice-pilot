@@ -128,14 +128,14 @@ test("tool loop: data tool, then UI tools, then the streamed answer with cues", 
   assert.equal(kw.tool_choice, undefined);
 });
 
-test("a step that writes words after an earlier step's words gets a space delta between them", async () => {
+test("a step that ends in tool calls closes its words with a space at once (the browser speaks the lead-in while tools run)", async () => {
   const { turn } = makeTurn([
     { content: [text("First thought."), tool("wait", { ms: 100 })], stop_reason: "tool_use" },
     reply(text("Second thought.")),
   ]);
   const ev = await collect(turn);
   const deltas = ev.filter((e) => e.event === "delta").map((e) => [e.data.text, e.data.step]);
-  assert.deepEqual(deltas, [["First thought.", 1], [" ", 2], ["Second thought.", 2]]);
+  assert.deepEqual(deltas, [["First thought.", 1], [" ", 1], ["Second thought.", 2]]);
   assert.equal(ev.at(-1)!.data.text, "First thought. Second thought.");
 });
 
@@ -322,7 +322,7 @@ test("registry: reserved and malformed names are rejected; big results are cut",
 
 test("the prompt text and UI tool schemas are the reference ones", () => {
   assert.deepEqual(UI_TOOLS.map((t) => t.name), ["navigate", "scroll_to", "highlight", "click", "fill", "wait"]);
-  assert.ok(ANSWER_SHAPE.startsWith("Answer shape, every time:") && ANSWER_SHAPE.endsWith("Write nothing before your tool calls are done."));
+  assert.ok(ANSWER_SHAPE.startsWith("Answer shape, every time:") && ANSWER_SHAPE.endsWith("otherwise write nothing until your tool calls are done."));
   assert.ok(TOUR_RULES.startsWith("You can drive this website while you talk.") && TOUR_RULES.endsWith("gets no UI calls."));
 });
 

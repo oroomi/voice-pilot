@@ -259,3 +259,13 @@ def test_tts_without_a_key_is_404_so_the_browser_voice_takes_over(app_client):
     c, _ = app_client
     assert c.post("/pilot/tts", json={"text": "Hello"}).status_code == 404
     assert c.post("/pilot/tts", json={"nope": 1}).status_code == 400
+
+
+def test_text_split_mid_word_is_forwarded_unchanged_and_steps_are_separated_once():
+    """The live API splits text mid-word ("Kelp" + "forge"); only the first delta of a new step may get a separating space."""
+    script = [reply(text("One moment.", chunks=["One mom", "ent."]), tool("highlight", target="hero")),
+              reply(text("[[1]] Kelpforge leads.", chunks=["[[1]] Kel", "pforge le", "ads."]))]
+    turn, _ = _turn(script)
+    ev = _events(turn)
+    said = "".join(d["text"] for k, d in ev if k == "delta")
+    assert said == "One moment. [[1]] Kelpforge leads." and ev[-1][1]["text"] == said
