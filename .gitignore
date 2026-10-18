@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+node_modules/
+server-node/node_modules/
+.pytest_cache/
+docs/screens/_tmp/
