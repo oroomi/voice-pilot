@@ -725,6 +725,7 @@ class Pilot {
     }
     if (my !== this.seq) return;
     if (failed) this.messages.pop(); else this.messages.push({ role: "assistant", content: clean(answer) });
+    if (this.messages.length > 40) this.messages = this.messages.slice(-40);
     n.end();
   }
   readSSE(resp, on) {

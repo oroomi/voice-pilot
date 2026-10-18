@@ -33,8 +33,8 @@ python3 -m uvicorn server.app:app --host 127.0.0.1 --port 8151
 ```
 
 Open http://127.0.0.1:8151 in Chrome, press **Talk to Aava** (or the mic button) and say *"Show me the best match and why"*, or click
-the chip with that question. Aava says "Let me pull that up." while the model works (about 4 s), opens Kelpforge's page, spotlights the
-score, then "Why it fits", then "Next step", speaking a sentence for each. No keys? `PILOT_REHEARSAL=1` runs the same loop with a scripted
+the chip with that question. In our last live run Aava said "Let me pull that up." while the model worked (first words after 4.4 s),
+opened Kelpforge's page, spotlighted the score, then "Why it fits", then "Next step", one sentence each (the model's words vary per run). No keys? `PILOT_REHEARSAL=1` runs the same loop with a scripted
 plan and shows a **Rehearsal** badge; without ElevenLabs keys the browser's voice speaks.
 
 There is no GIF yet: the screenshots above are from `python3 tools/shots.py` (scripted stream) and `tools/live_check.py` (real model and voice).
@@ -96,7 +96,7 @@ If your page scripts bind to elements directly (not by delegation), re-bind them
    export default function Pilot() {
      const router = useRouter();
      useEffect(() => {
-       import(/* webpackIgnore: true */ "/pilot/client/pilot.js" as string).then(({ default: VoicePilot }) =>
+       import(/* webpackIgnore: true */ /* turbopackIgnore: true */ "/pilot/client/pilot.js" as string).then(({ default: VoicePilot }) =>
          VoicePilot.init({ manifest: "/pilot.manifest.json", navigate: async (path: string) => router.push(path) }));
      }, [router]);
      return null;
